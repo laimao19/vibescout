@@ -33,7 +33,6 @@ Though implementing all of these would be nice, these are all just potential ide
 
 ## Test Plan
 - **Test/Train Split**: 70-80% of the data for training, 20-30% for testing
-  - I may split up my data temporally (since user visits are time-based I could use earlier visits for training and reserve more recent visits for testing) or I could just do random split
 - **Evaluation and Testing**:
   - **Metrics for Evaluation**: precision at K, mean average precision (MAP), root mean squared error (RMSE), hit rate
   - **Testing Plan** (possible options): holdout testing, A/B testing (comparing two different models), k-folds (? not sure if this works for non CNNs (convolutional neural networks), majority voting algorithm
