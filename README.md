@@ -1,6 +1,6 @@
 # VibeScout - Personalized Recommendation Website
 
-This project aims to build a personalized recommendation website that helps users decide on places to visit or dine at, based on their Spotify listening data and reviews of specific locations. Users can either input a specific place they're thinking of visiting, and the website will generate a summary of whether they might like it (based on reviews and keywords), or they can ask the website to suggest a list of places they might enjoy based on past behavior and preferences.
+This project aims to build a personalized recommendation website that helps users decide on places to visit or dine at, based on their Spotify listening data and reviews of specific locations. Users can either input a specific place they're thinking of visiting, and the website will generate a summary of whether they might like it (based on reviews and keywords), or they can ask the website to suggest a list of places they might enjoy.
 
 ## Goals
 - Develop a recommendation system that summarizes whether a user will like a specific place based on their spotify listening history (their "personality" profile), reviews, and keywords with a high likelihood that they will like that recommendation
