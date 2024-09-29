@@ -16,7 +16,8 @@ This project aims to build a personalized recommendation website that helps user
 ## Feature Extraction
 Just to be more specific on what features I want to extract from the data I've collected, I've listed the features here:
 - **User Music Preferences**: Genres: Determine what genres (e.g., rock, pop, jazz) are most prominent in their listening habits. Mood and Energy: Based on the audio features (valence, energy), categorize the user’s overall mood and energy. Titles to Playlists: gym listening session, for picnics, etc.
-- 
+
+
 ## Modeling
 Currently, I do not have a set machine-learning model in mind for this project. However, here are some possibilities for me to use:
 - **Collaborative Filtering**: Using a matrix factorization approach (e.g. SVD or ALS), I would implement user-item collaborative filtering to predict a user's preference for unvisited places based on the preferences of similar users.
