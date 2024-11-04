@@ -1,3 +1,4 @@
+// frontend/services/api.js
 import axios from 'axios';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
@@ -22,14 +23,7 @@ export const fetchSpotifyData = async () => {
 };
 
 export const fetchNearbyPlaces = async (userCoordinates, radius) => {
-  // Ensure radius is defined and in meters
   const convertedRadius = radius ? radius * 1609.34 : 5000; // Default to 5000 meters if radius is undefined
-
-  console.log("Fetching nearby places with parameters:", {
-    lat: userCoordinates?.lat,
-    lng: userCoordinates?.lng,
-    radius: convertedRadius,
-  });
 
   try {
     const response = await axios.get(`${API_BASE_URL}/api/places/nearby`, {
@@ -42,6 +36,20 @@ export const fetchNearbyPlaces = async (userCoordinates, radius) => {
     return response.data.places;
   } catch (error) {
     console.error('Error fetching nearby places:', error.response?.data || error.message);
+    return [];
+  }
+};
+
+// New function for fetching content-based recommendations
+export const fetchContentBasedRecommendations = async (userPreferences, places) => {
+  try {
+    const response = await axios.post(`${API_BASE_URL}/api/recommendations/content-based`, {
+      user_preferences: userPreferences,
+      places: places
+    });
+    return response.data.recommendations;
+  } catch (error) {
+    console.error('Error fetching content-based recommendations:', error.response?.data || error.message);
     return [];
   }
 };

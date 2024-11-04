@@ -1,5 +1,6 @@
+// frontend/pages/index.js
 import React, { useEffect, useState } from 'react';
-import { fetchGoogleReviews, fetchSpotifyData, fetchPlaceSuggestions, fetchNearbyPlaces } from '../services/api';
+import { fetchGoogleReviews, fetchSpotifyData, fetchPlaceSuggestions, fetchNearbyPlaces, fetchContentBasedRecommendations } from '../services/api';
 import BarChart from '../components/BarChart';
 import dynamic from 'next/dynamic';
 import Map from '../components/Map';
@@ -15,6 +16,7 @@ export default function HomePage() {
   const [placeAttributes, setPlaceAttributes] = useState({});
   const [recommendations, setRecommendations] = useState([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userPreferences, setUserPreferences] = useState({});
 
   // Check if redirected from Spotify login
   useEffect(() => {
@@ -30,6 +32,13 @@ export default function HomePage() {
       const loadSpotifyData = async () => {
         const data = await fetchSpotifyData();
         setSpotifyData(data);
+        setUserPreferences({
+          valence: data[0]?.valence || 0.5,
+          energy: data[0]?.energy || 0.5,
+          loudness: data[0]?.loudness || 0.5,
+          ambiance: data[0]?.ambiance || 0.5,
+          liveness: data[0]?.liveness || 0.5,
+        });
       };
       loadSpotifyData();
     }
@@ -39,10 +48,9 @@ export default function HomePage() {
   const loadReviews = async () => {
     if (placeId) {
       const data = await fetchGoogleReviews(placeId);
-      const reviewArray = Array.isArray(data) ? data : []; // Ensure reviews are an array
+      const reviewArray = Array.isArray(data) ? data : [];
       setReviews(reviewArray);
 
-      // Example dynamic data extraction from reviews for place attributes
       const attributes = analyzePlaceAttributesFromReviews(reviewArray);
       setPlaceAttributes(attributes);
     }
@@ -66,18 +74,18 @@ export default function HomePage() {
     let ambianceSum = 0;
     let livenessSum = 0;
     const reviewCount = reviews.length;
-  
+
     reviews.forEach((review) => {
       const sentimentScore = review.sentiment || 0.5;
       const reviewLength = review.text?.length || 0;
-  
+
       valenceSum += sentimentScore;
       energySum += Math.min(reviewLength / 100, 1);
       loudnessSum += Math.abs(sentimentScore - 0.5) * 2;
       ambianceSum += sentimentScore > 0.5 ? 0.7 : 0.3;
       livenessSum += (Math.random() * 0.5) + (sentimentScore > 0.5 ? 0.5 : 0);
     });
-  
+
     return {
       valence: reviewCount ? valenceSum / reviewCount : 0.5,
       energy: reviewCount ? energySum / reviewCount : 0.5,
@@ -111,13 +119,13 @@ export default function HomePage() {
     window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/api/spotify/login`;
   };
 
-  // Fetch recommendations within a specified radius
+  // Fetch recommendations within a specified radius using content-based filtering
   const fetchRecommendations = async (radius) => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(async (position) => {
         const userCoordinates = {
           lat: position.coords.latitude,
-          lng: position.coords.longitude
+          lng: position.coords.longitude,
         };
 
         const nearbyPlaces = await fetchNearbyPlaces(userCoordinates, radius);
@@ -127,18 +135,8 @@ export default function HomePage() {
           setRecommendations([]);
           console.log("No places found within the specified radius.");
         } else {
-          const scoredPlaces = await Promise.all(
-            nearbyPlaces.map(async (place) => {
-              const placeReviews = await fetchGoogleReviews(place.place_id);
-              console.log("Reviews for place:", place.name, placeReviews); // Debug: Check reviews for each place
-          
-              const attributes = analyzePlaceAttributesFromReviews(placeReviews);
-              return { ...place, attributes };
-            })
-          );
-          
-
-          setRecommendations(scoredPlaces);
+          const recommendations = await fetchContentBasedRecommendations(userPreferences, nearbyPlaces);
+          setRecommendations(recommendations);
         }
       });
     } else {
@@ -147,15 +145,13 @@ export default function HomePage() {
   };
 
   // Prepare data for BarChart
-  const userPreferences = spotifyData.length
-    ? [
-        spotifyData[0].valence || 0,
-        spotifyData[0].energy || 0,
-        spotifyData[0].loudness || 0,
-        spotifyData[0].ambiance || 0,
-        spotifyData[0].liveness || 0,
-      ]
-    : [0, 0, 0, 0, 0];
+  const userPreferencesData = [
+    userPreferences.valence || 0,
+    userPreferences.energy || 0,
+    userPreferences.loudness || 0,
+    userPreferences.ambiance || 0,
+    userPreferences.liveness || 0,
+  ];
 
   const placeFeatures = [
     placeAttributes.valence || 0,
@@ -172,12 +168,11 @@ export default function HomePage() {
   }, {});
 
   const wordArray = Object.entries(wordFrequency)
-    .filter(([_, count]) => count >= 1)  // Filter for words that appear more than 5 times
+    .filter(([_, count]) => count >= 1)  // Only show words that appear more than 5 times
     .map(([text, value]) => ({ text, value }));
 
   return (
     <div>
-      {/* Google Reviews Section */}
       <h1>Search for a Place</h1>
       <input
         type="text"
@@ -211,7 +206,6 @@ export default function HomePage() {
         ))}
       </ul>
 
-      {/* Spotify Data Section */}
       <h1>Your Spotify Vibe</h1>
       {!isLoggedIn ? (
         <button onClick={handleSpotifyLogin}>Login with Spotify</button>
@@ -232,19 +226,15 @@ export default function HomePage() {
         </ul>
       )}
 
-      {/* Word Cloud Section */}
       <h2>Word Cloud of Review Keywords</h2>
       <WordCloudComponent words={wordArray} />
 
-      {/* Bar Chart Section */}
       <h2>User Preferences vs. Place Features</h2>
-      <BarChart userData={userPreferences} placeData={placeFeatures} />
+      <BarChart userData={userPreferencesData} placeData={placeFeatures} />
 
-      {/* Map Section */}
       <h2>Map of Recommended Places</h2>
       <Map />
 
-      {/* Recommendations Section */}
       <h2>Recommendations Near You</h2>
       <div>
         <button onClick={() => fetchRecommendations(5)}>5 miles</button>
@@ -256,14 +246,14 @@ export default function HomePage() {
           {recommendations.map((place, index) => (
             <li key={index}>
               <h3>{place.name}</h3>
-              <p>Rating: {place.rating || "Not available"}</p>
-              <p>Location: {place.vicinity}</p>
-              <p>Types: {place.types.join(', ')}</p>
-              <p>Valence: {place.attributes.valence}</p>
-              <p>Energy: {place.attributes.energy}</p>
-              <p>Loudness: {place.attributes.loudness}</p>
-              <p>Ambiance: {place.attributes.ambiance}</p>
-              <p>Liveness: {place.attributes.liveness}</p>
+              <p>Similarity Score: {place.similarity_score.toFixed(2)}</p>
+              <ul>
+                <li>Sentiment Variance: {place.category_scores.sentiment_variance.toFixed(2)}</li>
+                <li>Average Review Length: {place.category_scores.review_length.toFixed(2)}</li>
+                <li>Keyword Frequency - Clean: {place.category_scores.keyword_clean}</li>
+                <li>Keyword Frequency - Comfortable: {place.category_scores.keyword_comfortable}</li>
+                <li>Keyword Frequency - Friendly: {place.category_scores.keyword_friendly}</li>
+              </ul>
             </li>
           ))}
         </ul>
