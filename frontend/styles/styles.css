@@ -1,0 +1,95 @@
+/* styles/styles.css */
+
+body {
+    font-family: Arial, sans-serif;
+    color: #333;
+    background-color: #f5f7fa;
+    margin: 0;
+    padding: 0;
+}
+
+.container {
+    max-width: 800px;
+    margin: auto;
+    padding: 20px;
+}
+
+h1, h2 {
+    font-weight: bold;
+    color: #1a73e8;
+    text-align: center;
+}
+
+input[type="text"] {
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    width: 100%;
+    max-width: 300px;
+    margin: 10px auto;
+    display: block;
+}
+
+button {
+    background-color: #1a73e8;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    margin: 10px auto;
+    display: block;
+    font-size: 1rem;
+}
+
+button:hover {
+    background-color: #155cb0;
+}
+
+ul {
+    list-style: none;
+    padding: 0;
+}
+
+ul li {
+    background-color: white;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 15px;
+    margin: 10px 0;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+ul li h3 {
+    color: #333;
+    font-size: 1.2rem;
+    margin: 0;
+}
+
+ul li p {
+    margin: 5px 0;
+    color: #555;
+}
+
+ul li ul {
+    padding-left: 20px;
+}
+
+ul li ul li {
+    font-size: 0.9rem;
+    color: #666;
+}
+
+#wordCloudContainer {
+    margin: 20px 0;
+    text-align: center;
+}
+
+.map-container {
+    margin-top: 20px;
+    text-align: center;
+}
+
+.bar-chart-container {
+    margin: 20px auto;
+}
