@@ -3,9 +3,9 @@ import React, { useEffect, useState } from 'react';
 import { fetchGoogleReviews, fetchSpotifyData, fetchPlaceSuggestions, fetchNearbyPlaces, fetchContentBasedRecommendations } from '../services/api';
 import BarChart from '../components/BarChart';
 import dynamic from 'next/dynamic';
-import Map from '../components/Map';
 
 const WordCloudComponent = dynamic(() => import('../components/WordCloud'), { ssr: false });
+const Map = dynamic(() => import('../components/Map'), { ssr: false });
 
 export default function HomePage() {
   const [query, setQuery] = useState('');
@@ -17,12 +17,24 @@ export default function HomePage() {
   const [recommendations, setRecommendations] = useState([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userPreferences, setUserPreferences] = useState({});
+  const [userLocation, setUserLocation] = useState(null); // User's current location
 
   // Check if redirected from Spotify login
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('spotify_login') === 'success') {
       setIsLoggedIn(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition((position) => {
+        setUserLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+      });
     }
   }, []);
 
@@ -121,28 +133,24 @@ export default function HomePage() {
 
   // Fetch recommendations within a specified radius using content-based filtering
   const fetchRecommendations = async (radius) => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(async (position) => {
-        const userCoordinates = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        };
-
-        const nearbyPlaces = await fetchNearbyPlaces(userCoordinates, radius);
-        console.log("Nearby places received on frontend:", nearbyPlaces);
-
-        if (nearbyPlaces.length === 0) {
-          setRecommendations([]);
-          console.log("No places found within the specified radius.");
-        } else {
-          const recommendations = await fetchContentBasedRecommendations(userPreferences, nearbyPlaces);
-          setRecommendations(recommendations);
-        }
-      });
+    if (userLocation) {
+      const nearbyPlaces = await fetchNearbyPlaces(userLocation, radius);
+      if (nearbyPlaces.length > 0) {
+        const recommendations = await fetchContentBasedRecommendations(userPreferences, nearbyPlaces);
+        setRecommendations(recommendations);
+      } else {
+        setRecommendations([]);
+      }
     } else {
-      console.error("Geolocation is not supported by this browser.");
+      console.error("User location not available.");
     }
   };
+
+  const markers = recommendations.map((place) => ({
+    lat: place.lat,
+    lng: place.lng,
+    name: place.name,
+  }));
 
   // Prepare data for BarChart
   const userPreferencesData = [
@@ -233,7 +241,7 @@ export default function HomePage() {
       <BarChart userData={userPreferencesData} placeData={placeFeatures} />
 
       <h2>Map of Recommended Places</h2>
-      <Map />
+      <Map center={userLocation} markers={markers} />
 
       <h2>Recommendations Near You</h2>
       <div>

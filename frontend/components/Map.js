@@ -1,26 +1,31 @@
-import React from 'react';
+// components/Map.js
+
+import React, { useEffect, useState } from 'react';
 import { GoogleMap, LoadScript, Marker } from '@react-google-maps/api';
 
 const containerStyle = {
   width: '100%',
-  height: '400px'
+  height: '400px',
 };
 
-const center = {
-  lat: 37.7749,
-  lng: -122.4194
-};
+function Map({ center, markers }) {
+  const [mapCenter, setMapCenter] = useState(center); // Set initial center
 
-function Map() {
+  useEffect(() => {
+    if (center) {
+      setMapCenter(center); // Update map center if center prop changes
+    }
+  }, [center]);
+
   return (
-    <LoadScript googleMapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}>
-      <GoogleMap mapContainerStyle={containerStyle} center={center} zoom={10}>
-        {/* Add markers based on recommendation locations */}
-        <Marker position={center} />
+    <LoadScript googleMapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_API_KEY}>
+      <GoogleMap mapContainerStyle={containerStyle} center={mapCenter} zoom={12}>
+        {markers && markers.map((marker, index) => (
+          <Marker key={index} position={{ lat: marker.lat, lng: marker.lng }} label={marker.name} />
+        ))}
       </GoogleMap>
     </LoadScript>
   );
 }
 
 export default Map;
-
