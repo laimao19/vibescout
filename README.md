@@ -1,11 +1,14 @@
 # VibeScout - Personalized Recommendation Website
-
+Demo Video: https://youtu.be/-zHLoPUuJr8?si=jnO68lQXnDxwKgwe
 This project aims to build a personalized recommendation website that helps users decide on places to visit or dine at, based on their Spotify listening data and reviews of specific locations. Users can either input a specific place they're thinking of visiting, and the website will generate a summary of whether they might like it (based on reviews and keywords), or they can ask the website to suggest a list of places they might enjoy.
 
+## Major NOTE
+Spotify has introduced changes to the way their Web API works so now I am no longer able to access audio features and analysis which were a crucial part of my original proposed project (https://developer.spotify.com/blog/2024-11-27-changes-to-the-web-api). I will still keep my original code and retain instructions for this repo as if this functionality still exists in case this changes in the future, but I will also be adding code and instructions for my new approach to this project which includes using Kaggle data with the most streamed Spotify songs in 2023 (https://www.kaggle.com/datasets/nelgiriyewithana/top-spotify-songs-2023) using a random subset of the top songs upon entering the website for an example random comparison of a given place's attributes and a user's Spotify song's attributes and also suggestion of nearby places based on those attributes. Additionally, out of the songs of the dataset, the user can also choose to specify 10 that they like to customize their profile (though in a limited way since they only have the selection of these Kaggle dataset songs).
+
 ## Goals
-- **Primary Goal**: Determine whether there is a meaningful relationship between Spotify listening habits and user reviews of locations.
+- **Primary Goal**: Determine whether a meaningful relationship exists between Spotify listening habits and user review of locations.
   - Specifically, the focus will be on how audio features (e.g., energy, valence) and playlist types might predict a user’s likelihood to enjoy a place based on keyword and sentiment analysis of place reviews.
-- **Secondary Goal**: Develop the capability for suggesting a list of potential places based on the user's music preferences.
+- **Secondary Goal**: Develop the capability to suggest a list of potential places based on the user's music preferences.
 
 ## Data Collection
 - **Spotify API Data**:
