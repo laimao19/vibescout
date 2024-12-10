@@ -56,26 +56,25 @@ def analyze_reviews(reviews):
                 binary=True
             )
             
-            # Ensure text is properly formatted for vectorizer
             text_for_vectorizer = [text.lower()]  # Pass as a list of one string
-            
             try:
                 keyword_matrix = vectorizer.fit_transform(text_for_vectorizer)
                 feature_names = vectorizer.get_feature_names_out()
                 keyword_scores = np.asarray(keyword_matrix.sum(axis=0)).ravel()
-                
-                # Get keywords that appear in the text
                 keywords = [feature_names[i] for i in range(len(feature_names)) 
                           if keyword_scores[i] > 0]
             except Exception as e:
                 print(f"Error in keyword extraction: {str(e)}")
                 keywords = []
 
+            # Format keywords as a comma-separated string
+            keywords_string = ", ".join(keywords)
+
             analyzed_review = {
                 'text': text,
                 'rating': float(review.get('rating', 0)) if review.get('rating') is not None else 0,
                 'sentiment': float(sentiment),
-                'keywords': keywords,
+                'keywords': keywords_string,  # Updated to comma-separated string
                 'time': review.get('time'),
                 'author_name': review.get('author_name', 'Anonymous')
             }
@@ -86,6 +85,7 @@ def analyze_reviews(reviews):
             continue
 
     return analyzed_reviews if analyzed_reviews else []
+
 
 def calculate_review_metrics(reviews):
     """Calculate aggregate metrics from a set of reviews"""

@@ -37,19 +37,39 @@ export const fetchMusicData = async () => {
 };
 
 export const fetchNearbyPlaces = async (userCoordinates, radius) => {
-  const convertedRadius = radius ? radius * 1609.34 : 5000; // Convert miles to meters
+  if (!userCoordinates?.lat || !userCoordinates?.lng) {
+    console.error('Invalid coordinates:', userCoordinates);
+    return [];
+  }
 
+  // Convert radius from miles to meters and cap at 50,000 meters (Google's limit)
+  const MAX_RADIUS_METERS = 50000;
+  const radiusInMeters = Math.min(radius * 1609.34, MAX_RADIUS_METERS);
+  
   try {
+    console.log(`Fetching places near ${userCoordinates.lat},${userCoordinates.lng} within ${radiusInMeters}m`);
+    
     const response = await axios.get(`${API_BASE_URL}/api/places/nearby`, {
       params: {
-        lat: userCoordinates?.lat,
-        lng: userCoordinates?.lng,
-        radius: convertedRadius,
+        lat: userCoordinates.lat,
+        lng: userCoordinates.lng,
+        radius: radiusInMeters,
       },
     });
-    return response.data.places;
+
+    // If we got fewer results than expected and we capped the radius,
+    // log a warning to help with debugging
+    if (response.data.places?.length < 5 && radius * 1609.34 > MAX_RADIUS_METERS) {
+      console.warn('Got limited results due to radius cap. Consider implementing pagination or multiple searches.');
+    }
+    
+    return response.data.places || [];
   } catch (error) {
-    console.error('Error fetching nearby places:', error);
+    console.error('Error fetching nearby places:', {
+      error: error.message,
+      status: error.response?.status,
+      data: error.response?.data
+    });
     return [];
   }
 };

@@ -1,68 +1,87 @@
+// Import necessary modules
 import React from 'react';
 import WordCloud from 'react-wordcloud';
 
-const WordCloudComponent = ({ words, reviews }) => {
-  // Process words to include sentiment
-  const processedWords = words.map(word => {
-    let totalSentiment = 0;
-    let occurrences = 0;
+// List of common stop words to filter out
+const stopWords = new Set([
+  'the', 'is', 'and', 'or', 'of', 'to', 'a', 'in', 'it', 'on', 'for', 'with', 'was', 'this', 'that', 'at', 'as', 'an', 
+  'by', 'be', 'are', 'from', 'but', 'not', 'we', 'you', 'i', 'me', 'my', 'so', 'your', 'their', 'they', 'if', 'can',
+]);
 
-    // Find this word in reviews and calculate average sentiment
-    reviews.forEach(review => {
-      if (review.keywords && review.keywords.includes(word.text)) {
-        totalSentiment += (review.sentiment || 0.5);
-        occurrences++;
+// Function to calculate TF-IDF
+const calculateTFIDF = (reviews) => {
+  const termCounts = {}; // Term frequency across all reviews
+  const docCount = reviews.length; // Total number of reviews
+
+  reviews.forEach((review) => {
+    const words = review.text.toLowerCase().split(/\W+/); // Tokenize text and normalize case
+    const uniqueWords = new Set(words); // Count each word only once per document
+
+    uniqueWords.forEach((word) => {
+      if (!termCounts[word]) {
+        termCounts[word] = { count: 0, docFrequency: 0 };
       }
+      termCounts[word].docFrequency += 1;
     });
 
-    const avgSentiment = occurrences > 0 ? totalSentiment / occurrences : 0.5;
-
-    // Determine color based on sentiment
-    let color;
-    if (avgSentiment > 0.6) {
-      color = '#2ecc71'; // Green for positive
-    } else if (avgSentiment < 0.4) {
-      color = '#e74c3c'; // Red for negative
-    } else {
-      color = '#3498db'; // Blue for neutral
-    }
-
-    return {
-      ...word,
-      color,
-      // Adjust value (size) based on both frequency and sentiment intensity
-      value: word.value * (Math.abs(avgSentiment - 0.5) + 0.5)
-    };
+    words.forEach((word) => {
+      if (termCounts[word]) {
+        termCounts[word].count += 1;
+      }
+    });
   });
 
+  // Calculate TF-IDF scores
+  const tfidfScores = Object.entries(termCounts).map(([term, { count, docFrequency }]) => {
+    const tf = count / docCount; // Term Frequency (normalized)
+    const idf = Math.log(docCount / (docFrequency + 1)); // Inverse Document Frequency
+    return { term, score: tf * idf };
+  });
+
+  // Filter out stop words, short words, and low scores
+  return tfidfScores
+    .filter(({ term, score }) => 
+      !stopWords.has(term) && term.length > 2 && score > 0.35 // Adjust threshold as needed
+    )
+    .sort((a, b) => b.score - a.score); // Sort by score in descending order
+};
+
+// WordCloud Component
+const WordCloudComponent = ({ reviews }) => {
+  // Calculate TF-IDF for reviews
+  const tfidfScores = calculateTFIDF(reviews);
+
+  // Convert TF-IDF scores into WordCloud-compatible data
+  const words = tfidfScores.map(({ term, score }) => ({
+    text: term,
+    value: score,
+  }));
+
+  // WordCloud options
   const options = {
+    colors: ['#60A5FA', '#34D399', '#F472B6', '#FBBF24', '#A78BFA'],
     enableTooltip: true,
-    fontSizes: [20, 80],
-    rotations: 2,
-    rotationAngles: [-90, 0],
+    deterministic: true,
     fontFamily: 'Inter',
+    fontSizes: [24, 80],
+    fontStyle: 'normal',
     fontWeight: 'bold',
-    padding: 3,
-    deterministic: true, // Makes layout consistent between renders
-    tooltipOptions: {
-      content: (word) => `${word.text} (Mentions: ${word.originalValue}, Sentiment: ${word.sentiment?.toFixed(2)})`,
-    }
+    padding: 6,
+    rotations: 2,
+    rotationAngles: [0],
+    scale: 'sqrt',
+    spiral: 'rectangular',
+    transitionDuration: 1000,
   };
 
   const callbacks = {
-    getWordTooltip: (word) => {
-      const sentiment = word.sentiment > 0.6 ? "Positive" : word.sentiment < 0.4 ? "Negative" : "Neutral";
-      return `${word.text} (${sentiment})`;
-    },
+    getWordTooltip: (word) => `${word.text}: TF-IDF score ${word.value.toFixed(2)}`,
   };
 
   return (
-    <div style={{ width: '100%', height: '400px' }}>
-      <WordCloud 
-        words={processedWords} 
-        options={options}
-        callbacks={callbacks}
-      />
+    <div className="wordcloud-container">
+      <h2 className="text-xl font-bold text-white mb-4">Word Cloud</h2>
+      <WordCloud words={words} options={options} callbacks={callbacks} />
     </div>
   );
 };

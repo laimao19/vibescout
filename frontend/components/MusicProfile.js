@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import { X, Music } from 'lucide-react';
 import axios from 'axios';
 
 const MusicProfile = ({ setUserPreferences }) => {
@@ -28,6 +27,7 @@ const MusicProfile = ({ setUserPreferences }) => {
       const processedData = response.data
         .filter(track => track && track.track_name && track['artist(s)_name'])
         .map(track => ({
+          id: `${track.track_name}-${track['artist(s)_name']}`,
           track_name: String(track.track_name),
           artist: String(track['artist(s)_name']),
           valence: Number(track['valence_%'] || 0) / 100,
@@ -47,23 +47,46 @@ const MusicProfile = ({ setUserPreferences }) => {
     }
   };
 
-  useEffect(() => {
-    if (selectedTracks.length > 0) {
-      const averages = calculateAverages(selectedTracks);
-      setUserPreferences(averages);
+  const handleSearch = (query) => {
+    setSearchQuery(query);
+    if (!query) {
+      loadSpotifyData();
+      return;
     }
-  }, [selectedTracks, setUserPreferences]);
+    
+    const filtered = tracks.filter(track => {
+      return track.track_name.toLowerCase().includes(query.toLowerCase()) ||
+             track.artist.toLowerCase().includes(query.toLowerCase());
+    }).slice(0, 50);
+    
+    setTracks(filtered);
+  };
 
-  const calculateAverages = (tracks) => {
-    if (!tracks.length) return {
-      valence: 0,
-      energy: 0,
-      loudness: 0,
-      ambiance: 0,
-      liveness: 0
-    };
+  const addTrack = (track) => {
+    if (selectedTracks.length >= 10) {
+      return; // Max 10 songs
+    }
+    
+    if (!selectedTracks.some(selected => selected.id === track.id)) {
+      const newSelectedTracks = [...selectedTracks, track];
+      setSelectedTracks(newSelectedTracks);
+      updateUserPreferences(newSelectedTracks);
+    }
+  };
 
-    const sum = tracks.reduce((acc, track) => ({
+  const removeTrack = (trackId) => {
+    const newSelectedTracks = selectedTracks.filter(track => track.id !== trackId);
+    setSelectedTracks(newSelectedTracks);
+    updateUserPreferences(newSelectedTracks);
+  };
+
+  const updateUserPreferences = (tracks) => {
+    if (!tracks.length) {
+      setUserPreferences({});
+      return;
+    }
+
+    const averages = tracks.reduce((acc, track) => ({
       valence: acc.valence + (track.valence || 0),
       energy: acc.energy + (track.energy || 0),
       loudness: acc.loudness + ((track.valence > 0.5 ? 0.7 : 0.3) || 0),
@@ -71,10 +94,11 @@ const MusicProfile = ({ setUserPreferences }) => {
       liveness: acc.liveness + ((track.acousticness > 0.5 ? 0.7 : 0.3) || 0)
     }), { valence: 0, energy: 0, loudness: 0, ambiance: 0, liveness: 0 });
 
-    return Object.keys(sum).reduce((acc, key) => {
-      acc[key] = sum[key] / tracks.length;
-      return acc;
-    }, {});
+    Object.keys(averages).forEach(key => {
+      averages[key] = averages[key] / tracks.length;
+    });
+
+    setUserPreferences(averages);
   };
 
   const generateRandomProfile = () => {
@@ -87,168 +111,130 @@ const MusicProfile = ({ setUserPreferences }) => {
     }
     
     setSelectedTracks(randomTracks);
+    updateUserPreferences(randomTracks);
+    setIsCustomizing(false);
   };
 
-  const handleSearch = (query) => {
-    setSearchQuery(query);
-    if (!query) {
-      loadSpotifyData();
-      return;
-    }
-    
-    const filtered = tracks.filter(track => {
-      if (!track || typeof track.track_name !== 'string' || typeof track.artist !== 'string') {
-        return false;
-      }
-      return track.track_name.toLowerCase().includes(query.toLowerCase()) ||
-             track.artist.toLowerCase().includes(query.toLowerCase());
-    }).slice(0, 50);
-    
-    setTracks(filtered);
+  const resetProfile = () => {
+    setSelectedTracks([]);
+    setUserPreferences({});
+    setIsCustomizing(false);
   };
-
-  const averageAttributes = calculateAverages(selectedTracks);
-  
-  const chartData = [
-    {
-      name: 'Valence',
-      'User Preferences': averageAttributes.valence,
-      'Place Attributes': 0
-    },
-    {
-      name: 'Energy',
-      'User Preferences': averageAttributes.energy,
-      'Place Attributes': 0
-    },
-    {
-      name: 'Loudness',
-      'User Preferences': averageAttributes.loudness,
-      'Place Attributes': 0
-    },
-    {
-      name: 'Ambiance',
-      'User Preferences': averageAttributes.ambiance,
-      'Place Attributes': 0
-    },
-    {
-      name: 'Liveness',
-      'User Preferences': averageAttributes.liveness,
-      'Place Attributes': 0
-    }
-  ];
 
   if (isLoading) {
-    return (
-      <Card className="w-full max-w-4xl mx-auto p-6">
-        <CardContent>
-          <div className="flex justify-center items-center h-32">
-            Loading music data...
-          </div>
-        </CardContent>
-      </Card>
-    );
+    return <div className="text-center text-gray-400">Loading music data...</div>;
   }
 
   if (error) {
-    return (
-      <Card className="w-full max-w-4xl mx-auto p-6">
-        <CardContent>
-          <div className="flex justify-center items-center h-32 text-red-600">
-            {error}
-          </div>
-        </CardContent>
-      </Card>
-    );
+    return <div className="text-center text-red-400">{error}</div>;
   }
 
   return (
-    <div className="container">
-      <div className="flex justify-center gap-4 mb-6">
-        <button 
+    <div className="space-y-6">
+      {/* Control Buttons */}
+      <div className="flex flex-wrap gap-4">
+        <button
           onClick={() => setIsCustomizing(!isCustomizing)}
-          className="bg-blue-500 text-white px-6 py-3 rounded-lg shadow hover:bg-blue-600 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
         >
-          {isCustomizing ? 'Cancel' : 'Customize Profile'}
+          {isCustomizing ? 'Done' : 'Customize Profile'}
         </button>
-        <button 
+        <button
           onClick={generateRandomProfile}
-          className="bg-green-500 text-white px-6 py-3 rounded-lg shadow hover:bg-green-600 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
         >
-          Generate Random Profile
+          Generate Random
+        </button>
+        <button
+          onClick={resetProfile}
+          className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+        >
+          Reset Profile
         </button>
       </div>
 
-      {isCustomizing ? (
-        <div className="space-y-4">
-          <input
-            type="text"
-            placeholder="Search tracks..."
-            value={searchQuery}
-            onChange={(e) => handleSearch(e.target.value)}
-            className="w-full max-w-xl mx-auto px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-          <div className="max-h-96 overflow-y-auto bg-white rounded-lg shadow">
-            {tracks.map((track, index) => (
-              <div 
-                key={`${track.track_name}-${track.artist}-${index}`}
-                onClick={() => {
-                  if (selectedTracks.length < 10) {
-                    setSelectedTracks([...selectedTracks, track]);
-                  }
-                }}
-                className="p-4 border-b border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors"
-              >
-                <div className="font-semibold text-gray-800">{track.track_name}</div>
-                <div className="text-gray-600">{track.artist}</div>
-              </div>
-            ))}
+{/* Selected Songs Display - Always visible */}
+{selectedTracks.length > 0 && (
+  <div>
+    <h3 className="text-lg font-semibold text-white mb-4">Selected Songs ({selectedTracks.length}/10)</h3>
+    <div className="simple-card-grid mb-6">
+      {selectedTracks.map((track) => (
+        <div key={track.id} className="simple-card relative">
+          <button
+            onClick={() => removeTrack(track.id)}
+            className="absolute top-2 right-2 text-gray-400 hover:text-red-400 transition-colors"
+          >
+            <X size={16} />
+          </button>
+          <h3 className="simple-card-title">{track.track_name}</h3>
+          <p className="simple-card-subtitle">{track.artist}</p>
+          <div className="simple-card-metric">
+            <span className="simple-card-metric-label">Positivity:</span>
+            <span className="simple-card-metric-value">{(track.valence * 100).toFixed(1)}%</span>
+          </div>
+          <div className="simple-card-metric">
+            <span className="simple-card-metric-label">Energy:</span>
+            <span className="simple-card-metric-value">{(track.energy * 100).toFixed(1)}%</span>
+          </div>
+          <div className="simple-card-metric">
+            <span className="simple-card-metric-label">Danceability:</span>
+            <span className="simple-card-metric-value">{(track.danceability * 100).toFixed(1)}%</span>
+          </div>
+          <div className="simple-card-metric">
+            <span className="simple-card-metric-label">Acousticness:</span>
+            <span className="simple-card-metric-value">{(track.acousticness * 100).toFixed(1)}%</span>
           </div>
         </div>
-      ) : (
-        <div className="space-y-8">
-          {selectedTracks.length > 0 && (
-            <div className="bg-white p-6 rounded-lg shadow-lg">
-              <h2 className="text-xl font-bold text-gray-800 mb-4">Your Music Profile Analysis</h2>
-              <div className="h-96">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" domain={[-6, 1]} />
-                    <YAxis type="category" dataKey="name" width={100} />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="User Preferences" fill="#ffb6c1" />
-                    <Bar dataKey="Place Attributes" fill="#87ceeb" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          )}
-          
-          <div className="grid gap-4">
-            {selectedTracks.map((track, index) => (
-              <div key={index} className="bg-white p-6 rounded-lg shadow-lg transition-transform hover:scale-[1.02]">
-                <h3 className="text-lg font-bold text-gray-800 mb-2">{track.track_name}</h3>
-                <p className="text-gray-600 mb-4">{track.artist}</p>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-gray-50 p-3 rounded">
-                    <span className="font-medium">Positivity:</span> {(track.valence * 100).toFixed(1)}%
-                  </div>
-                  <div className="bg-gray-50 p-3 rounded">
-                    <span className="font-medium">Energy:</span> {(track.energy * 100).toFixed(1)}%
-                  </div>
-                  <div className="bg-gray-50 p-3 rounded">
-                    <span className="font-medium">Danceability:</span> {(track.danceability * 100).toFixed(1)}%
-                  </div>
-                  <div className="bg-gray-50 p-3 rounded">
-                    <span className="font-medium">Acousticness:</span> {(track.acousticness * 100).toFixed(1)}%
-                  </div>
-                </div>
-              </div>
-            ))}
+      ))}
+    </div>
+  </div>
+)}
+
+{/* Customization Section */}
+{isCustomizing && (
+  <div className="space-y-4">
+    <input
+      type="text"
+      placeholder="Search songs..."
+      value={searchQuery}
+      onChange={(e) => handleSearch(e.target.value)}
+      className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+    />
+    
+    <div className="simple-card-grid">
+      {tracks.map((track) => (
+        <div
+          key={track.id}
+          onClick={() => addTrack(track)}
+          className={`simple-card cursor-pointer transition-colors ${
+            selectedTracks.some(selected => selected.id === track.id)
+              ? 'bg-blue-900/20'
+              : 'hover:bg-gray-700/50'
+          }`}
+        >
+          <h3 className="simple-card-title">{track.track_name}</h3>
+          <p className="simple-card-subtitle">{track.artist}</p>
+          <div className="simple-card-metric">
+            <span className="simple-card-metric-label">Positivity:</span>
+            <span className="simple-card-metric-value">{(track.valence * 100).toFixed(1)}%</span>
+          </div>
+          <div className="simple-card-metric">
+            <span className="simple-card-metric-label">Energy:</span>
+            <span className="simple-card-metric-value">{(track.energy * 100).toFixed(1)}%</span>
+          </div>
+          <div className="simple-card-metric">
+            <span className="simple-card-metric-label">Danceability:</span>
+            <span className="simple-card-metric-value">{(track.danceability * 100).toFixed(1)}%</span>
+          </div>
+          <div className="simple-card-metric">
+            <span className="simple-card-metric-label">Acousticness:</span>
+            <span className="simple-card-metric-value">{(track.acousticness * 100).toFixed(1)}%</span>
           </div>
         </div>
-      )}
+      ))}
+    </div>
+  </div>
+)}
     </div>
   );
 };
