@@ -1,5 +1,5 @@
 # VibeScout - Personalized Recommendation Website
-Demo Video: RECORDING
+Demo Video: https://youtu.be/-5RndqAICK8?si=vPzv68P_J7MVi8Y3
 
 VibeScout is a personalized recommendation system website that helps users discover places to visit or dine at based on their music preferences and reviews of nearby locations. By leveraging Spotify data and sentiment analysis of Google Places reviews, VibeScout creates tailored suggestions to match users' unique vibes.
 
@@ -37,11 +37,11 @@ Originally, this website was meant to use the Spotify API to allow users to log 
 # Data Collection and Processing
 ## Spotify Data
 - **Source**: https://www.kaggle.com/datasets/nelgiriyewithana/top-spotify-songs-2023
-- **Processing**: Normalized features (e.g., valence, energy) to construct user profiles and profiles reflect average audio feature scores for selected tracks.
+- **Processing**: The Spotify dataset contains audio features for songs, which were used to construct the user's music preference profile. The primary preprocessing steps were to first do feature selection of the main features such as valence, energy, danceability, acousticness, etc. and these were selected for their relevance in constructing a meaningful "user vibe". Streams and the value of how many Spotify playlists the songs were in were excluded from user profiling. To ensure comparability across features, all features were normalized to a 0-1 range using Min-Max scaling to preserve the relative importance of features while allowing them to contribute equally to similarity calculations.
 
 ## Google Places Data
 - **Source**: Google Places API
-- **Processing**: Extracts up to 5 reviews per place within a specified radius, analyzes reviews for sentiment, keywords, and emotional metrics, filters irrelevant place types, and constructs feature vectors for matching.
+- **Processing**: The Google Places API provides place details, including reviews, which were processed into feature vectors representing each place. Up to 5 reviews were fetched per places within a specified search radius and the reviews included text, a rating, an author name, and the timestamp. The TextBlob library was used to calculate a sentiment score for each review between -1 and +1 and the TfidfVectorizer was applied to reviews to identify the most relevant words based on TF-IDF and the top 5 keywords for each place were retained. Places without adequate review data were excluded, and certain place types such as hospitals, universities, and religious centers were excluded using a predefined list to give more relevant recommendations.
 
 # Modeling
 ## Content-Based Filtering
