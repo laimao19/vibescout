@@ -1,81 +1,106 @@
-# content_based.py
 import numpy as np
 from textblob import TextBlob
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-def process_review_text(reviews):
-    """Process review texts into a single string"""
-    return " ".join([str(review.get('text', '')) for review in reviews if review.get('text')])
+def default_metadata():
+    """Return default metadata structure when no data is available."""
+    return {
+        'sentiment': {
+            'average': 0,
+            'variance': 0
+        },
+        'review_quality': {
+            'average_length': 0,
+            'detail_variance': 0,
+            'review_count': 0
+        },
+        'keywords': [],
+        'emotional_stats': {
+            'positivity': 0,
+            'activity_level': 0
+        }
+    }
+
+def build_metadata(data):
+    """Build metadata object from analyzed data."""
+    return {
+        'sentiment': {
+            'average': float(data['avg_sentiment']),
+            'variance': float(data['sentiment_variance'])
+        },
+        'review_quality': {
+            'average_length': float(data['avg_length']),
+            'detail_variance': float(data.get('rating_variance', 0)),
+            'review_count': len(data['reviews'])
+        },
+        'keywords': data.get('keywords', []),
+        'emotional_stats': {
+            'positivity': float(data['emotional_score']),
+            'activity_level': float(data['activity_level'])
+        }
+    }
+
+def extract_keywords(texts):
+    """Extract top keywords from review texts using TF-IDF."""
+    vectorizer = TfidfVectorizer(max_features=10, stop_words='english')
+    X = vectorizer.fit_transform(texts)
+    return vectorizer.get_feature_names_out()
 
 def build_place_feature_vector(reviews):
-    """Build feature vector from reviews with error handling"""
     if not reviews:
-        return np.zeros(6), {
-            'sentiment': {'average': 0, 'variance': 0},
-            'review_quality': {'average_length': 0, 'detail_variance': 0},
-            'keywords': []
-        }
-
+        return np.zeros(8), default_metadata()  # Updated dimensions
+    
     try:
-        # Extract sentiment scores
+        # Sentiment analysis
         sentiment_scores = [review.get('sentiment', 0) for review in reviews]
         avg_sentiment = np.mean(sentiment_scores) if sentiment_scores else 0
         sentiment_variance = np.var(sentiment_scores) if sentiment_scores else 0
-
-        # Process review texts
+        
+        # Rating analysis
+        ratings = [review.get('rating', 0) for review in reviews]
+        avg_rating = np.mean(ratings) if ratings else 0
+        rating_variance = np.var(ratings) if ratings else 0
+        
+        # Text analysis
         texts = [str(review.get('text', '')) for review in reviews if review.get('text')]
         avg_length = np.mean([len(text.split()) for text in texts]) if texts else 0
+        keywords = extract_keywords(texts) if texts else []
         
-        # Get keywords using TF-IDF
+        # Emotional content
+        emotional_score = 0
+        activity_level = 0
         if texts:
-            vectorizer = TfidfVectorizer(
-                max_features=10,
-                stop_words='english',
-                ngram_range=(1, 2)
-            )
-            try:
-                tfidf_matrix = vectorizer.fit_transform(texts)
-                feature_names = vectorizer.get_feature_names_out()
-                tfidf_scores = np.asarray(tfidf_matrix.mean(axis=0)).ravel()
-                
-                # Get top keywords
-                top_indices = tfidf_scores.argsort()[-5:][::-1]
-                keywords = [(feature_names[i], float(tfidf_scores[i])) 
-                          for i in top_indices]
-            except Exception as e:
-                print(f"Error in TF-IDF processing: {str(e)}")
-                keywords = []
-        else:
-            keywords = []
+            combined_text = ' '.join(texts)
+            blob = TextBlob(combined_text)
+            emotional_score = blob.sentiment.polarity
+            
+            # Activity level based on action words
+            activity_words = ['fun', 'busy', 'active', 'loud', 'quiet', 'peaceful', 'exciting']
+            activity_level = sum(1 for word in activity_words if word in combined_text.lower()) / len(activity_words)
 
-        # Build feature vector
+        # Feature vector
         feature_vector = np.array([
             avg_sentiment,
             sentiment_variance,
-            avg_length / 100,  # Normalize length
-            len(keywords) / 10,  # Keyword diversity
-            np.mean([review.get('rating', 0) for review in reviews]) / 5,  # Normalized rating
-            1 if keywords else 0  # Has meaningful content
+            avg_rating / 5,  # Normalized
+            rating_variance,
+            avg_length / 200,  # Normalized length
+            emotional_score,
+            activity_level,
+            len(reviews) / 20  # Normalized review count
         ])
 
-        metadata = {
-            'sentiment': {
-                'average': float(avg_sentiment),
-                'variance': float(sentiment_variance)
-            },
-            'review_quality': {
-                'average_length': float(avg_length),
-                'review_count': len(reviews)
-            },
-            'keywords': [{'word': word, 'score': float(score)} for word, score in keywords]
-        }
-
-        return feature_vector, metadata
+        return feature_vector, build_metadata({
+            'avg_sentiment': avg_sentiment,
+            'sentiment_variance': sentiment_variance,
+            'avg_length': avg_length,
+            'rating_variance': rating_variance,
+            'reviews': reviews,
+            'emotional_score': emotional_score,
+            'activity_level': activity_level,
+            'keywords': keywords
+        })
 
     except Exception as e:
         print(f"Error building feature vector: {str(e)}")
-        return np.zeros(6), {
-            'sentiment': {'average': 0, 'variance': 0},
-            'review_quality': {'average_length': 0, 'detail_variance': 0},
-            'keywords': []
-        }
+        return np.zeros(8), default_metadata()
