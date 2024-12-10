@@ -1,63 +1,128 @@
 # VibeScout - Personalized Recommendation Website
-Demo Video: https://youtu.be/-zHLoPUuJr8?si=jnO68lQXnDxwKgwe
-This project aims to build a personalized recommendation website that helps users decide on places to visit or dine at, based on their Spotify listening data and reviews of specific locations. Users can either input a specific place they're thinking of visiting, and the website will generate a summary of whether they might like it (based on reviews and keywords), or they can ask the website to suggest a list of places they might enjoy.
+Demo Video: RECORDING
 
-## Major NOTE
-Spotify has introduced changes to the way their Web API works so now I am no longer able to access audio features and analysis which were a crucial part of my original proposed project (https://developer.spotify.com/blog/2024-11-27-changes-to-the-web-api). I will still keep my original code and retain instructions for this repo as if this functionality still exists in case this changes in the future, but I will also be adding code and instructions for my new approach to this project which includes using Kaggle data with the most streamed Spotify songs in 2023 (https://www.kaggle.com/datasets/nelgiriyewithana/top-spotify-songs-2023) using a random subset of the top songs upon entering the website for an example random comparison of a given place's attributes and a user's Spotify song's attributes and also suggestion of nearby places based on those attributes. Additionally, out of the songs of the dataset, the user can also choose to specify 10 that they like to customize their profile (though in a limited way since they only have the selection of these Kaggle dataset songs).
+VibeScout is a personalized recommendation system website that helps users discover places to visit or dine at based on their music preferences and reviews of nearby locations. By leveraging Spotify data and sentiment analysis of Google Places reviews, VibeScout creates tailored suggestions to match users' unique vibes.
 
-## Goals
-- **Primary Goal**: Determine whether a meaningful relationship exists between Spotify listening habits and user review of locations.
-  - Specifically, the focus will be on how audio features (e.g., energy, valence) and playlist types might predict a user’s likelihood to enjoy a place based on keyword and sentiment analysis of place reviews.
-- **Secondary Goal**: Develop the capability to suggest a list of potential places based on the user's music preferences.
+# Dataset Note
+Originally, this website was meant to use the Spotify API to allow users to log in with their Spotify account and get more personalized recommendations. However, midway through my project, Spotify introduced changes to the way their Web API works so now I am no longer able to access audio features and analysis which were a crucial part of my original proposed project (https://developer.spotify.com/blog/2024-11-27-changes-to-the-web-api). Due to this, I shifted this project's focus to use a Kaggle dataset with the most streamed Spotify songs in 2023 (https://www.kaggle.com/datasets/nelgiriyewithana/top-spotify-songs-2023). The dataset is provided in this GitHub repo, so downloading is not necessary.
 
-## Data Collection
-- **Spotify API Data**:
-  - Collect user data such as top tracks and audio features.
-  - Audio features will inform the user's general vibe and help categorize them by mood or energy.
-- **Review and Keyword Data**: Gather reviews and locations of places from the Google Places API. Focus on keywords and sentiment extracted from reviews, which can then be cross-referenced with audio features from Spotify to find potential patterns.
+# Features
+## Core Functionalities
+1. **Interactive Map**: Displays nearby places with markers for recommendations and user location.
+2. **Content-Based Recommendations**: Uses Spotify and Google Places data to suggest locations based on similarity scores.
+3. **Bar Chart Visualization**: Compares user music preferences with attributes of a given place that was searched up.
+4. **Dynamic Word Cloud**: Highlights informative keywords from reviews of a given place.
+5. **Informative Descriptions about Songs and Recommended Places**: Attributes such as danceability, energy, crowd vibe, etc. are provided about the songs that are attributed with your profile and the recommended places.
+
+## User Experience
+- Users can customize their music profiles by selecting songs or generating a random profile.
+- Recommendations are diverse and filtered to exclude irrelevant places such as hotels or medical facilities.
+- Each recommendation includes detailed metrics like music match, crowd vibe, and overall mood.
+
+# Code Structure
+## Backend
+- `places.py`: Fetches nearby places using the Google Places API, filters invalid results, excludes certain categories (e.g., lodging, medical facilities) to give more relevant recommendations to the user, and logs detailed information for debugging and reproducibility.
+- `reviews.py`: Retrieves and analyzes Google Places reviews, and extracts sentiment and keywords using TextBlob and CountVectorizer.
+- `spotify.py`: Loads Spotify data, allows users to customize or randomly generate a music profile, and normalizes audio features like valence, energy, and danceability.
+- `recommendation.py`: Implements the content-based filtering model, calculates similarity scores between user profiles and place attributes, and ensures diversity in recommendations (giving a slight randomness to recommendations so not only the absolute best ones every time show up).
+- `content_based.py`: Constructs feature vectors for places using reviews and keywords and handles sentiment analysis and text processing for enhanced place descriptions.
+
+## Frontend
+- `Map.js`: Displays places and recommendations on an interactive Google Map and allows users to view directions and details for each recommendation.
+- `BarChart.js`: Renders a bar chart comparing user preferences (e.g., valence, energy) to place attributes and provides a clear visual representation of the match between user profiles and places.
+- `MusicProfile.js`: Manages the user’s Spotify profile, allows users to select tracks or generate random profiles, and updates user preferences based on selected tracks.
+- `RecommendationCard.js`: Displays detailed information about each recommended place, including: music match percentage, crowd vibe and mood metrics., keywords derived from reviews.
+- `WordCloud.js`: Dynamically generates a word cloud visualization using review data, highlights frequently mentioned keywords in reviews to help users understand the attributes of a place, and built with customizable options for interactivity and appearance.
+
+# Data Collection and Processing
+## Spotify Data
+- **Source**: https://www.kaggle.com/datasets/nelgiriyewithana/top-spotify-songs-2023
+- **Processing**: Normalized features (e.g., valence, energy) to construct user profiles and profiles reflect average audio feature scores for selected tracks.
+
+## Google Places Data
+- **Source**: Google Places API
+- **Processing**: Extracts up to 5 reviews per place within a specified radius, analyzes reviews for sentiment, keywords, and emotional metrics, filters irrelevant place types, and constructs feature vectors for matching.
+
+# Modeling
+## Content-Based Filtering
+1. **User Vector**: The user profile is built using Spotify-derived features, which are normalized to a 0-1 range for consistent comparisons. The features used are:
+   - Valence: A measure of musical positivity or happiness
+   - Energy: The perceived intensity or activity level of the music
+   - Danceability: A score reflecting how suitable a track is for dancing
+   - Acousticness: A measure of how acoustic a track is
+   - Instrumentalness: The likelihood of a track being instrumental
+   - Liveness: A measure of how "live" the track sounds and speechiness: How much speech-like content the track has.
+   - For a user: each track's audio features are retrieved from the Kaggle dataset and these features are averaged across selected or randomly generated tracks to form a user profile vector.
+3. **Place Vector**: Places are represented by feature vectors constructed from Google Places API reviews. The following attributes are extracted from reviews to create place feature vectors:
+   - Sentiment: the average sentiment score of all reviews, computed using TextBlob
+   - Sentiment variance: the variability of sentiments across reviews, indicating polarizing or consistent opinions
+   - Average review length: captures how detailed reviews are, reflecting the effort users put into describing their experience
+   - Keyword frequencies: extracted using TfidfVectorizer, and these represent frequently mentioned aspects of the place (e.g., "cozy," "clean," "crowded")
+   - Emotional score: an aggregate score that reflects the overall positivity or negativity of the reviews
+   - Activity Level: a score based on the presence of activity-related keywords (e.g., "loud," "fun," "peaceful").
+   - For a given place: up to 5 reviews are fetched via the Google Places API, sentiment analysis and keyword extraction are performed on these reviews, and features are normalized to comparable scales and aggregated into an 8-dimensional vector.
+5. **Cosine Similarity**: To match users with places, cosine similarity is used. This measures the "angle" between the two vectors, with values ranging from -1 (completely opposite) to +1 (perfect match). A higher similarity score indicates a better match between the user's preferences and the place's attributes. Adjustments: distance factor: recommendations are adjusted based on distance from the user's location. Places further away require higher similarity scores to be considered and randomness: a small random factor is added to introduce diversity in recommendations.
+
+# Visualizations
+![Alt Text](https://i.giphy.com/media/v1.Y2lkPTc5MGI3NjExMGI1NzUxeDN0bWk5YjVobXo3NTJ0YnY1eWk5enBmMDAxcXVrYmQ4diZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/wuwmcTyfsREqhe4OIs/giphy.gif)
+1. **Interactive Map**: Highlights recommendations with dynamic markers.
+
+![Alt Text](https://i.giphy.com/media/v1.Y2lkPTc5MGI3NjExdjNsOTN2M2E0ZXQ3d2xocDN6OGQ3d3U0OHg2M3NldTl3ODl2YzM3ZiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/xEzyuUALUIFMs3rBth/giphy.gif)
+
+2. **Bar Chart**: Compares user preferences with place attributes side by side and provides clear insights into recommendation alignment.
+
+![Alt Text](https://i.giphy.com/media/v1.Y2lkPTc5MGI3NjExbGNwODhtbngzbHd6N3J6am80ZDA0YzNhdnE2MDZpd3N6dXoweG55ZyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/yMSUZOCcWWeWa6Bg1S/giphy.gif)
+
+3. **Word Cloud**: Summarizes frequently mentioned keywords from place reviews and dynamically updates based on the selected place.
 
 
-## Modeling
-Currently, the model I am using is content-based filtering to match the user's spotify profile with place attributes based on the similarity of feature vectors.
-- **Feature Vectors for Places**: I construct feature vectors for each place based on sentiment analysis and TF-IDF keyword frequencies derived from reviews.
-- **Similarity Calculation**: I use cosine similarity to calculate the similarity score between the user's Spotify preferences and each place's feature vector. Places with higher similarity scores are considered better matches.
-- **Model Architecture**
-  - User Vector: constructed using normalized Spotify data (with data such as energy, valence, danceability, etc. in the top tracks)
-  - Place Vector: constructed using attributes from Google Places reviews (such as cleanliness, friendliness, etc.)
-  - Cosine Similarity: used to quantify the "closeness" of a place to the user's preferences
+# Results
+The results of the VibeScout project demonstrate the potential for integrating music preferences and place reviews into a personalized recommendation system. The model outputs a ranked list of places tailored to the user's Spotify profile, with insights into the places' crowd vibe, overall mood, and alignment with the user's preferences. Below is a detailed breakdown of the key findings, observations, and outcomes.
 
-These are some possibilities for me to additionally use to get more specific/accurate predictions for places to go:
-- **Collaborative Filtering**: Using a matrix factorization approach (e.g. SVD or ALS), I would implement user-item collaborative filtering to predict a user's preference for unvisited places based on the preferences of similar users.
-- **Hybrid Model (Collaborative + Content-Based)**: This model would combine collaborative filtering which looks at user preferences based on behavior with content-based filtering which looks at place features based on reviews. The CF (collaborative filtering) model would recommend places based on user similarity while refining recommendations using content-based features (keywords, sentiment) from the CBF (content-based filtering) model.
+My content-based filtering model can find recommendations for places based on a given music profile with up to a 100% "match" and accurately define a place's crowd vibe and mood as chill, relaxed, balanced, or upbeat and as validated by my own experience and further research into the places recommended. This seems to indicate that the content-based filtering model is performing well with the given user and place vectors as information to recommend places, however, I believe that there seems to be a core issue either on the side of the Google Places API or with the way that I process the Google Places API's given places within a certain radius of my location. I believe there to be an issue because though if I change my listening profile I do get some variation in the "music profile match" percentage, I do not tend to get new places recommended at all varying from 5 miles to 30 miles. On average, one or two new places may show up as recommended to me if I expand the radius for recommendations but more often than not the recommendations list does not change at all. Therefore, I speculate if this is an issue on the side of my content-based filtering model, perhaps I am not giving the model features that vary enough with different places and only the same set of places really even qualify to be recommended. However, I believe perhaps it may also be on the Google Places API side as, during debugging stages, when I print out ALL of the places that the API sends initially to me without any filtering they are always the same places no matter the distance. A possible fix for this could be to use the new version of the Places API instead of the old one as it may have more information available but using the new Places API requires a paid plan, so for now I will stick with the old version.
 
-## Data Visualization
-This is the current status of my visualizations on my webpage.
-- **Interactive Map Visualization (Google Maps Data)**: An interactive map where users can see their previously visited locations marked with different icons for what type of place it is (like restaurant or attraction) and potential new recommendations highlighted. You would be able to hover over each place for a brief summary. This currently works to be initialized to a user's location but is still not working yet to show the little location markers.
-- **Word Cloud/Review Summaries**: A dynamic word cloud that summarizes the top keywords extracted from the reviews of places the user is considering that has frequently mentioned words. Hoping to make this more dynamic.
-- **Bar Chart (User Preferences vs. Recommendations)**: bar chart that compares the user's Spotify-derived preferences for features like valence, energy, loudness, ambiance, and liveness with the corresponding features of a searched up specific place. The side-by-side comparison helps visualize how well each place aligns with the user's personal "vibe."
+When it comes to generating the word cloud and also generating place attributes for a given place that is searched up, first, it seems that my approach of using TF-IDF vectorization and removing stop-words that are words like "the", "and", etc. has allowed for the word cloud to no longer have the previous issue of having irrelevant words present. However, with certain places when searched up, it does happen sometimes for some places that words like "like", "little", "would" etc still do show up unfortunately despite my rigorous filtering for these types of words. I believe that to completely remove these types of words but also keep an abundance of words still present to be able to accurately describe the type of place that was searched, I would need to do more rigorous NLP-type filtering and perhaps include other types of information other than reviews such as the places' Google description if they have one. With regards to the place attributes generated for a given place (which is displayed on the bar chart in comparison to a user's music profile attributes), every time I put in a new place that varies from the previous one the attributes do change noticeably with each of the different factors (valence, energy, loudness, ambiance, and liveness) and it seems to match up to my own research, experience, and also if the place was one that was recommended on the website it also seems to match up with the crowd vibe and overall mood assignments.
 
-These are visualizations I'd like to add:
-- **Likelihood Plot**: Visualization that shows how likely a user is to enjoy a specific place or activity based on reviews and keywords. Some nice features to add would be to have an interactive slider where users can adjust certain preferences (like distance, rating threshold, or keywords) and the plot will dynamically update and a "confidence meter" that shifts in real-time showing the model's confidence for that recommendation. Visualization on how well a place matches their mood or music taste (e.g., based on energy level or genre preferences). Maybe like a gauge.
+# Reproducing the Code
+## Installation
+1. Clone the repository
+   ```
+   git clone https://github.com/yourusername/vibescout.git
+   cd vibescout
+   ```
+2. Install backend and frontend dependencies
+   ```
+   make install
+   ```
+If you have any issues with installation, please `cd` accordingly into backend and do `pip install` or into frontend and do `npm install`
 
-## Test Plan
-This is just in case I end up needing it later for training.
-- **Test/Train Split**: 70-80% of the data for training, 20-30% for testing
-- **Evaluation and Testing**:
-  - **Metrics for Evaluation**: precision at K, mean average precision (MAP), root mean squared error (RMSE), hit rate
-  - **Testing Plan** (possible options): holdout testing, A/B testing (comparing two different models), k-folds (? not sure if this works for non CNNs (convolutional neural networks)), majority voting algorithm
+## Running the Project
+1. Start the backend in one terminal tab
+      ```
+   make run-backend
+   ```
+2. Start the frontend in another terminal tab
+      ```
+    make run-frontend
+   ```
+My Makefile is optimized for Windows machines as that is the machine that I created the code on, so you may need to adjust some things in the Makefile if you do not have a Windows machine.
 
-## Data Processing
-**Spotify Data Processing**
-- Feature Extraction: I retrieve features from the user's top tracks using the Spotify API. Each track's valence, energy, loudness, ambiance, and liveness values are averaged to create a single "user preferences" profile.
-- Normalization: User preferences are normalized to a 0-1 scale where necessary to facilitate comparison with place attributes
+**IMPORTANT NOTE**: You also need a Google Places API key in order to be able to properly run this as well as a flask secret key. On the backend, you will need to have a `.env` file that holds 
+```
+FLASK_ENV=development
+GOOGLE_API_KEY="yourkeyhere"
+FLASK_SECRET_KEY="yourkeyhere"
+```
+On the frontend, you will also need a `.env.local` file that holds
+```
+NEXT_PUBLIC_GOOGLE_API_KEY=yourkeyhere
+NEXT_PUBLIC_API_URL=http://localhost:5000
+```
 
-**Google Places Data Processing**
-- Review Collection: using the Google Places API, I collect reviews (5 of them) for each place within a specified radius (5, 10, 15 miles) of the user's location
-- Sentiment Analysis: each review text is analyzed to calculate a sentiment score, which contributes to an overall sentiment score for the place
-- Keyword Extraction: use TF-IDF (term frequency inverse document frequency) to identify important keywords in reviews, providing context to user feedback on each place
-- Feature Vector Generation: for each place, a feature vector is build comprimising an average sentiment score, sentiment variance, average review length, and keyword frequencies
-
-## Preliminary Results
-1. **Similarity Scores**: my initial results yield similarity scores for each recommended place within a specified radius from the user, with being able to generate even more specific values within the feature vector (for features such as cleanliness) as well. places with keywords or review sentiment aligning with the user's spotify profile seem to have higher scores.
-2. **Diverse Recommendations**: initial results seem to indicate a variety of place types in the recommendations which seem to indicate that the link with the google places api is working with finding actual places that the user might like, though the only issue right now is making sure that the calculation is being done well and is optimized to calculate similarity best.
-3. **Visual Results on Figures**: keywords from the reviews of a specified place seem to be generated effectively and understand "negativeness" or "positiveness" well as well as other nuances in keywords and bring out keywords that are important. additionally, it seems that the overall user profile for a user's spotify listening is successfully averagely quantifiable into the bar graph and the average sentiment is also able to be generally compared well with the user's profile. because of seeing a possibility of a match across multiple categories with the user's profile as well as an absolute no match i think there could be a relationship here.
+# Contributing
+Contributions are welcome! Please:
+1. Fork the repository.
+2. Create a feature branch (`git checkout -b feature-branch-name`).
+3. Commit changes (`git commit -m "Add feature"`).
+4. Push to the branch (`git push origin feature-branch-name`).
+5. Open a pull request.
