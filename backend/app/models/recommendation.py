@@ -13,57 +13,73 @@ EXCLUDED_PLACE_TYPES = {"hotel", "lodging", "motel", "inn"}
 
 @recommendations_bp.route('/content-based', methods=['POST'])
 def content_based_recommendation():
-    data = request.get_json()
-    user_preferences = data.get('user_preferences', {})
-    places = data.get('places', [])
+    try:
+        data = request.get_json()
+        user_preferences = data.get('user_preferences', {})
+        places = data.get('places', [])
 
-    recommendations = []
+        if not user_preferences or not places:
+            return jsonify({"error": "Missing user preferences or places"}), 400
 
-    user_vector = np.array([
-        user_preferences.get('sentiment', 0.5),
-        user_preferences.get('ambiance', 0.5),
-        user_preferences.get('energy', 0.5),
-        user_preferences.get('liveness', 0.5),
-        user_preferences.get('valence', 0.5),
-        0
-    ]).reshape(1, -1)
+        recommendations = []
 
-    for place in places:
-        if any(place_type in EXCLUDED_PLACE_TYPES for place_type in place.get("types", [])):
-            continue
+        user_vector = np.array([
+            user_preferences.get('valence', 0.5),
+            user_preferences.get('energy', 0.5),
+            user_preferences.get('loudness', 0.5),
+            user_preferences.get('ambiance', 0.5),
+            user_preferences.get('liveness', 0.5),
+            0.5
+        ]).reshape(1, -1)
 
-        reviews = get_google_reviews(place["place_id"])
-        if not reviews or 'error' in reviews:
-            continue
+        for place in places:
+            # Skip excluded place types
+            if any(place_type in EXCLUDED_PLACE_TYPES for place_type in place.get("types", [])):
+                continue
 
-        # Build the feature vector and include individual scores
-        place_vector = build_place_feature_vector(reviews)
-        place_scores = {
-            "sentiment_variance": place_vector[0],
-            "review_length": place_vector[1],
-            "keyword_clean": place_vector[2],
-            "keyword_comfortable": place_vector[3],
-            "keyword_friendly": place_vector[3],
-        }
+            # Get and analyze reviews
+            place_id = place.get("place_id")
+            if not place_id:
+                continue
 
-        similarity_score = cosine_similarity(user_vector, place_vector.reshape(1, -1))[0][0]
+            reviews = get_google_reviews(place_id)
+            if not reviews:
+                continue
 
-        recommendations.append({
-            "place_id": place["place_id"],
-            "name": place["name"],
-            "types": place.get("types", []),
-            "similarity_score": similarity_score,
-            "category_scores": place_scores,
+            # Build the feature vector and include individual scores
+            try:
+                place_vector, place_scores = build_place_feature_vector(reviews)
+                similarity_score = cosine_similarity(user_vector, place_vector.reshape(1, -1))[0][0]
+
+                # Calculate star rating (1-5)
+                star_rating = min(5, max(1, round(similarity_score * 5)))
+
+                recommendations.append({
+                    "place_id": place_id,
+                    "name": place.get("name"),
+                    "types": place.get("types", []),
+                    "similarity_score": float(similarity_score),
+                    "star_rating": star_rating,
+                    "category_scores": place_scores,
+                    "lat": place.get("geometry", {}).get("location", {}).get("lat"),
+                    "lng": place.get("geometry", {}).get("location", {}).get("lng"),
+                    "address": place.get("vicinity", "")
+                })
+            except Exception as e:
+                print(f"Error processing place {place_id}: {str(e)}")
+                continue
+
+        # Sort by similarity score
+        recommendations.sort(key=lambda x: x["similarity_score"], reverse=True)
+
+        return jsonify({
+            "status": "success",
+            "recommendations": recommendations[:10]
         })
 
-    recommendations.sort(key=lambda x: x["similarity_score"], reverse=True)
-    return jsonify({"recommendations": recommendations[:10]})
-
-
-
-def get_google_reviews(place_id):
-    google_api_key = os.getenv("GOOGLE_API_KEY")
-    url = f"https://maps.googleapis.com/maps/api/place/details/json?place_id={place_id}&fields=reviews&key={google_api_key}"
-    response = requests.get(url)
-    data = response.json()
-    return data.get('result', {}).get('reviews', [])
+    except Exception as e:
+        print(f"Error in recommendation: {str(e)}")
+        return jsonify({
+            "status": "error",
+            "error": str(e)
+        }), 500

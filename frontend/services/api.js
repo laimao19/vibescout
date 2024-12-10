@@ -1,10 +1,12 @@
-// frontend/services/api.js
+// services/api.js
 import axios from 'axios';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 export const fetchGoogleReviews = async (placeId) => {
-  const response = await axios.get(`${API_BASE_URL}/api/reviews/get-reviews`, { params: { place_id: placeId } });
+  const response = await axios.get(`${API_BASE_URL}/api/reviews/get-reviews`, { 
+    params: { place_id: placeId } 
+  });
   return response.data;
 };
 
@@ -15,15 +17,27 @@ export const fetchPlaceSuggestions = async (input) => {
   return response.data.predictions;
 };
 
-export const fetchSpotifyData = async () => {
-  const response = await axios.get(`${API_BASE_URL}/api/spotify/user-data`, {
-    withCredentials: true,  // This line ensures cookies (sessions) are included
-  });
-  return response.data;
+export const fetchMusicData = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/spotify/data`);
+    return response.data.tracks.map(track => ({
+      track_name: track.track_name,
+      artist: track.artist,
+      valence: track.valence,
+      energy: track.energy,
+      danceability: track.danceability,
+      acousticness: track.acousticness,
+      streams: track.streams,
+      popularity: track.popularity
+    }));
+  } catch (error) {
+    console.error('Error loading Spotify data:', error);
+    return [];
+  }
 };
 
 export const fetchNearbyPlaces = async (userCoordinates, radius) => {
-  const convertedRadius = radius ? radius * 1609.34 : 5000; // Default to 5000 meters if radius is undefined
+  const convertedRadius = radius ? radius * 1609.34 : 5000; // Convert miles to meters
 
   try {
     const response = await axios.get(`${API_BASE_URL}/api/places/nearby`, {
@@ -35,12 +49,11 @@ export const fetchNearbyPlaces = async (userCoordinates, radius) => {
     });
     return response.data.places;
   } catch (error) {
-    console.error('Error fetching nearby places:', error.response?.data || error.message);
+    console.error('Error fetching nearby places:', error);
     return [];
   }
 };
 
-// New function for fetching content-based recommendations
 export const fetchContentBasedRecommendations = async (userPreferences, places) => {
   try {
     const response = await axios.post(`${API_BASE_URL}/api/recommendations/content-based`, {
@@ -49,7 +62,41 @@ export const fetchContentBasedRecommendations = async (userPreferences, places) 
     });
     return response.data.recommendations;
   } catch (error) {
-    console.error('Error fetching content-based recommendations:', error.response?.data || error.message);
+    console.error('Error fetching recommendations:', error);
     return [];
   }
+};
+
+export const calculateAverageAttributes = (tracks) => {
+  if (!tracks.length) {
+    return {
+      valence: 0,
+      energy: 0,
+      danceability: 0,
+      acousticness: 0,
+      liveness: 0
+    };
+  }
+
+  const sum = tracks.reduce((acc, track) => ({
+    valence: acc.valence + (track.valence || 0),
+    energy: acc.energy + (track.energy || 0),
+    danceability: acc.danceability + (track.danceability || 0),
+    acousticness: acc.acousticness + (track.acousticness || 0),
+    liveness: acc.liveness + (track.liveness || 0)
+  }), {
+    valence: 0,
+    energy: 0,
+    danceability: 0,
+    acousticness: 0,
+    liveness: 0
+  });
+
+  return {
+    valence: sum.valence / tracks.length,
+    energy: sum.energy / tracks.length,
+    danceability: sum.danceability / tracks.length,
+    acousticness: sum.acousticness / tracks.length,
+    liveness: sum.liveness / tracks.length
+  };
 };

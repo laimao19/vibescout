@@ -1,8 +1,8 @@
-// frontend/pages/index.js
 import React, { useEffect, useState } from 'react';
-import { fetchGoogleReviews, fetchSpotifyData, fetchPlaceSuggestions, fetchNearbyPlaces, fetchContentBasedRecommendations } from '../services/api';
+import { fetchGoogleReviews, fetchPlaceSuggestions, fetchNearbyPlaces, fetchContentBasedRecommendations } from '../services/api';
 import BarChart from '../components/BarChart';
 import dynamic from 'next/dynamic';
+import MusicProfile from '../components/MusicProfile';
 
 const WordCloudComponent = dynamic(() => import('../components/WordCloud'), { ssr: false });
 const Map = dynamic(() => import('../components/Map'), { ssr: false });
@@ -12,20 +12,11 @@ export default function HomePage() {
   const [suggestions, setSuggestions] = useState([]);
   const [placeId, setPlaceId] = useState('');
   const [reviews, setReviews] = useState([]);
-  const [spotifyData, setSpotifyData] = useState([]);
   const [placeAttributes, setPlaceAttributes] = useState({});
   const [recommendations, setRecommendations] = useState([]);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userPreferences, setUserPreferences] = useState({});
-  const [userLocation, setUserLocation] = useState(null); // User's current location
-
-  // Check if redirected from Spotify login
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('spotify_login') === 'success') {
-      setIsLoggedIn(true);
-    }
-  }, []);
+  const [userLocation, setUserLocation] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -38,45 +29,31 @@ export default function HomePage() {
     }
   }, []);
 
-  // Fetch Spotify data if logged in
-  useEffect(() => {
-    if (isLoggedIn) {
-      const loadSpotifyData = async () => {
-        const data = await fetchSpotifyData();
-        setSpotifyData(data);
-        setUserPreferences({
-          valence: data[0]?.valence || 0.5,
-          energy: data[0]?.energy || 0.5,
-          loudness: data[0]?.loudness || 0.5,
-          ambiance: data[0]?.ambiance || 0.5,
-          liveness: data[0]?.liveness || 0.5,
-        });
-      };
-      loadSpotifyData();
-    }
-  }, [isLoggedIn]);
-
-  // Function to load Google reviews and update place attributes
   const loadReviews = async () => {
     if (placeId) {
-      const data = await fetchGoogleReviews(placeId);
-      const reviewArray = Array.isArray(data) ? data : [];
-      setReviews(reviewArray);
-
-      const attributes = analyzePlaceAttributesFromReviews(reviewArray);
-      setPlaceAttributes(attributes);
+      setIsLoading(true);
+      try {
+        const data = await fetchGoogleReviews(placeId);
+        const reviewArray = Array.isArray(data) ? data : [];
+        setReviews(reviewArray);
+        const attributes = analyzePlaceAttributesFromReviews(reviewArray);
+        setPlaceAttributes(attributes);
+      } catch (error) {
+        console.error('Error loading reviews:', error);
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
   const analyzePlaceAttributesFromReviews = (reviews) => {
     if (!Array.isArray(reviews) || reviews.length === 0) {
-      console.warn("No reviews to analyze for this place.");
       return {
-        valence: "No data",
-        energy: "No data",
-        loudness: "No data",
-        ambiance: "No data",
-        liveness: "No data",
+        valence: 0,
+        energy: 0,
+        loudness: 0,
+        ambiance: 0,
+        liveness: 0,
       };
     }
 
@@ -90,7 +67,6 @@ export default function HomePage() {
     reviews.forEach((review) => {
       const sentimentScore = review.sentiment || 0.5;
       const reviewLength = review.text?.length || 0;
-
       valenceSum += sentimentScore;
       energySum += Math.min(reviewLength / 100, 1);
       loudnessSum += Math.abs(sentimentScore - 0.5) * 2;
@@ -99,15 +75,14 @@ export default function HomePage() {
     });
 
     return {
-      valence: reviewCount ? valenceSum / reviewCount : 0.5,
-      energy: reviewCount ? energySum / reviewCount : 0.5,
-      loudness: reviewCount ? loudnessSum / reviewCount : 0.5,
-      ambiance: reviewCount ? ambianceSum / reviewCount : 0.5,
-      liveness: reviewCount ? livenessSum / reviewCount : 0.5,
+      valence: reviewCount ? valenceSum / reviewCount : 0,
+      energy: reviewCount ? energySum / reviewCount : 0,
+      loudness: reviewCount ? loudnessSum / reviewCount : 0,
+      ambiance: reviewCount ? ambianceSum / reviewCount : 0,
+      liveness: reviewCount ? livenessSum / reviewCount : 0,
     };
   };
 
-  // Handle input changes for autocomplete
   const handleInputChange = async (e) => {
     setQuery(e.target.value);
     if (e.target.value) {
@@ -118,7 +93,6 @@ export default function HomePage() {
     }
   };
 
-  // Handle selecting a suggestion
   const handlePlaceSelect = (place) => {
     setPlaceId(place.place_id);
     setQuery(place.description);
@@ -126,24 +100,49 @@ export default function HomePage() {
     setPlaceAttributes({});
   };
 
-  // Spotify login handler
-  const handleSpotifyLogin = () => {
-    window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/api/spotify/login`;
-  };
-
-  // Fetch recommendations within a specified radius using content-based filtering
   const fetchRecommendations = async (radius) => {
     if (userLocation) {
-      const nearbyPlaces = await fetchNearbyPlaces(userLocation, radius);
-      if (nearbyPlaces.length > 0) {
-        const recommendations = await fetchContentBasedRecommendations(userPreferences, nearbyPlaces);
-        setRecommendations(recommendations);
-      } else {
-        setRecommendations([]);
+      setIsLoading(true);
+      try {
+        const nearbyPlaces = await fetchNearbyPlaces(userLocation, radius);
+        if (nearbyPlaces.length > 0) {
+          const recommendations = await fetchContentBasedRecommendations(userPreferences, nearbyPlaces);
+          setRecommendations(recommendations);
+        } else {
+          setRecommendations([]);
+        }
+      } catch (error) {
+        console.error('Error fetching recommendations:', error);
+      } finally {
+        setIsLoading(false);
       }
-    } else {
-      console.error("User location not available.");
     }
+  };
+
+  const prepareWordCloudData = () => {
+    const wordFrequency = reviews.flatMap((review) => {
+      const keywords = review.keywords || [];
+      return keywords.map(keyword => ({
+        word: keyword,
+        sentiment: review.sentiment || 0.5
+      }));
+    }).reduce((acc, { word, sentiment }) => {
+      if (!acc[word]) {
+        acc[word] = { count: 0, totalSentiment: 0 };
+      }
+      acc[word].count += 1;
+      acc[word].totalSentiment += sentiment;
+      return acc;
+    }, {});
+
+    return Object.entries(wordFrequency)
+      .filter(([_, { count }]) => count >= 1)
+      .map(([text, { count, totalSentiment }]) => ({
+        text,
+        value: count,
+        sentiment: totalSentiment / count,
+        originalValue: count
+      }));
   };
 
   const markers = recommendations.map((place) => ({
@@ -152,7 +151,6 @@ export default function HomePage() {
     name: place.name,
   }));
 
-  // Prepare data for BarChart
   const userPreferencesData = [
     userPreferences.valence || 0,
     userPreferences.energy || 0,
@@ -169,104 +167,166 @@ export default function HomePage() {
     placeAttributes.liveness || 0,
   ];
 
-  // Prepare words for WordCloudComponent from keywords in reviews, only including words that appear more than five times
-  const wordFrequency = reviews.flatMap((review) => review.keywords || []).reduce((acc, word) => {
-    acc[word] = (acc[word] || 0) + 1;
-    return acc;
-  }, {});
-
-  const wordArray = Object.entries(wordFrequency)
-    .filter(([_, count]) => count >= 1)  // Only show words that appear more than 5 times
-    .map(([text, value]) => ({ text, value }));
-
   return (
-    <div>
-      <h1>Search for a Place</h1>
-      <input
-        type="text"
-        value={query}
-        onChange={handleInputChange}
-        placeholder="Enter a place name"
-      />
-      {suggestions.length > 0 && (
-        <ul style={{ border: '1px solid #ccc', maxHeight: '200px', overflowY: 'scroll' }}>
-          {suggestions.map((suggestion) => (
-            <li
-              key={suggestion.place_id}
-              onClick={() => handlePlaceSelect(suggestion)}
-              style={{ cursor: 'pointer', padding: '5px' }}
-            >
-              {suggestion.description}
-            </li>
-          ))}
-        </ul>
-      )}
-      <button onClick={loadReviews} disabled={!placeId}>Load Reviews</button>
-
-      <h2>Reviews</h2>
-      <ul>
-        {reviews.map((review, index) => (
-          <li key={index}>
-            <p>Rating: {review.rating} - {review.text}</p>
-            <p>Sentiment: {review.sentiment?.toFixed(2)}</p>
-            <p>Keywords: {review.keywords?.join(", ")}</p>
-          </li>
-        ))}
-      </ul>
-
-      <h1>Your Spotify Vibe</h1>
-      {!isLoggedIn ? (
-        <button onClick={handleSpotifyLogin}>Login with Spotify</button>
-      ) : (
-        <ul>
-          {spotifyData.map((track, index) => (
-            <li key={index}>
-              <strong>{track.track_name}</strong> by {track.artist}
-              <ul>
-                <li>Valence: {track.valence}</li>
-                <li>Energy: {track.energy}</li>
-                <li>Loudness: {track.loudness}</li>
-                <li>Ambiance: {track.ambiance}</li>
-                <li>Liveness: {track.liveness}</li>
-              </ul>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <h2>Word Cloud of Review Keywords</h2>
-      <WordCloudComponent words={wordArray} />
-
-      <h2>User Preferences vs. Place Features</h2>
-      <BarChart userData={userPreferencesData} placeData={placeFeatures} />
-
-      <h2>Map of Recommended Places</h2>
-      <Map center={userLocation} markers={markers} />
-
-      <h2>Recommendations Near You</h2>
-      <div>
-        <button onClick={() => fetchRecommendations(5)}>5 miles</button>
-        <button onClick={() => fetchRecommendations(10)}>10 miles</button>
-        <button onClick={() => fetchRecommendations(15)}>15 miles</button>
+    <div className="container mx-auto px-4 py-8">
+      <h1 className="text-3xl font-bold text-center mb-8">VibeScout</h1>
+      
+      <div className="max-w-2xl mx-auto mb-8">
+        <input
+          type="text"
+          value={query}
+          onChange={handleInputChange}
+          placeholder="Search for a place..."
+          className="w-full p-4 border rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
+        
+        {suggestions.length > 0 && (
+          <ul className="mt-2 border rounded-lg shadow-sm max-h-60 overflow-y-auto bg-white">
+            {suggestions.map((suggestion) => (
+              <li
+                key={suggestion.place_id}
+                onClick={() => handlePlaceSelect(suggestion)}
+                className="p-4 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
+              >
+                {suggestion.description}
+              </li>
+            ))}
+          </ul>
+        )}
+        
+        <button
+          onClick={loadReviews}
+          disabled={!placeId || isLoading}
+          className="mt-4 w-full bg-blue-500 text-white p-4 rounded-lg disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-600 transition-colors"
+        >
+          {isLoading ? 'Loading...' : 'Load Reviews'}
+        </button>
       </div>
-      {recommendations.length > 0 ? (
-        <ul>
-          {recommendations.map((place, index) => (
-            <li key={index}>
-              <h3>{place.name}</h3>
-              <p>Similarity Score: {place.similarity_score.toFixed(2)}</p>
-              <ul>
-                <li>Sentiment Variance: {place.category_scores.sentiment_variance.toFixed(2)}</li>
-                <li>Average Review Length: {place.category_scores.review_length.toFixed(2)}</li>
-                <li>Keyword Frequency - Clean: {place.category_scores.keyword_clean}</li>
-                <li>Keyword Frequency - Comfortable: {place.category_scores.keyword_comfortable}</li>
-                <li>Keyword Frequency - Friendly: {place.category_scores.keyword_friendly}</li>
-              </ul>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p>No recommendations found.</p>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+        <div className="bg-white p-6 rounded-lg shadow-lg">
+          <h2 className="text-2xl font-bold mb-4">Your Music Profile</h2>
+          <MusicProfile setUserPreferences={setUserPreferences} />
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow-lg">
+          <h2 className="text-2xl font-bold mb-4">Profile Comparison</h2>
+          <BarChart userData={userPreferencesData} placeData={placeFeatures} />
+        </div>
+      </div>
+
+      {reviews.length > 0 && (
+        <div className="bg-white p-6 rounded-lg shadow-lg mb-8">
+          <h2 className="text-2xl font-bold mb-4">Review Analysis</h2>
+          <div className="mb-8">
+            <h3 className="text-xl font-bold mb-4">Word Cloud</h3>
+            <WordCloudComponent words={prepareWordCloudData()} reviews={reviews} />
+          </div>
+          
+          <h3 className="text-xl font-bold mb-4">Reviews</h3>
+          <div className="space-y-4">
+            {reviews.map((review, index) => (
+              <div key={index} className="border rounded-lg p-4">
+                <div className="flex items-center mb-2">
+                  <span className="font-bold mr-2">Rating:</span> 
+                  <span className="text-yellow-500">{review.rating} ⭐</span>
+                </div>
+                <p className="mb-2">{review.text}</p>
+                <div className="text-sm text-gray-600">
+                  <p>Sentiment: {review.sentiment?.toFixed(2)}</p>
+                  <p>Keywords: {review.keywords?.join(", ")}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {userLocation && (
+        <div className="bg-white p-6 rounded-lg shadow-lg mb-8">
+          <h2 className="text-2xl font-bold mb-4">Recommendations</h2>
+          <div className="flex gap-4 mb-6">
+            {[5, 10, 15].map((radius) => (
+              <button
+                key={radius}
+                onClick={() => fetchRecommendations(radius)}
+                disabled={isLoading}
+                className="flex-1 bg-green-500 text-white p-3 rounded-lg hover:bg-green-600 disabled:bg-gray-300 transition-colors"
+              >
+                {radius} miles
+              </button>
+            ))}
+          </div>
+
+          <div className="mb-8">
+            <h3 className="text-xl font-bold mb-4">Map View</h3>
+            <div className="h-96">
+              <Map center={userLocation} markers={markers} />
+            </div>
+          </div>
+
+          {recommendations.length > 0 ? (
+  <div className="grid gap-4">
+    {recommendations.map((place, index) => (
+      <div key={index} className="border rounded-lg p-4">
+        <h3 className="text-lg font-bold mb-2">{place.name}</h3>
+        <p className="text-gray-600 mb-2">
+          Similarity Score: {place.similarity_score.toFixed(2)}
+          <span className="ml-2">
+            {[...Array(Math.round(place.star_rating || 0))].map((_, i) => (
+              <span key={i} className="text-yellow-400">★</span>
+            ))}
+          </span>
+        </p>
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div>Sentiment: {
+            place.category_scores?.sentiment?.average 
+              ? place.category_scores.sentiment.average.toFixed(2) 
+              : 'N/A'
+          }</div>
+          <div>Variance: {
+            place.category_scores?.sentiment?.variance 
+              ? place.category_scores.sentiment.variance.toFixed(2) 
+              : 'N/A'
+          }</div>
+          <div>Review Quality: {
+            place.category_scores?.review_quality?.average_length 
+              ? place.category_scores.review_quality.average_length.toFixed(2) 
+              : 'N/A'
+          }</div>
+          <div>Review Count: {
+            place.category_scores?.review_quality?.review_count || 'N/A'
+          }</div>
+        </div>
+        {place.category_scores?.keywords && place.category_scores.keywords.length > 0 && (
+          <div className="mt-2">
+            <p className="font-medium">Key Phrases:</p>
+            <div className="flex flex-wrap gap-2">
+              {place.category_scores.keywords.map((keyword, idx) => (
+                <span 
+                  key={idx}
+                  className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
+                >
+                  {keyword.word}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+        {place.address && (
+          <p className="mt-2 text-gray-600 text-sm">
+            📍 {place.address}
+          </p>
+        )}
+      </div>
+    ))}
+  </div>
+) : (
+  <p className="text-center text-gray-600">
+    No recommendations found. Try a different radius or update your preferences.
+  </p>
+          )}
+        </div>
       )}
     </div>
   );
