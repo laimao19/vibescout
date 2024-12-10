@@ -4,39 +4,78 @@ from textblob import TextBlob
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 def process_review_text(reviews):
-    place_reviews_text = " ".join([review['text'] for review in reviews])
-    return place_reviews_text
-
-def get_sentiment_score(text):
-    return TextBlob(text).sentiment.polarity
-
-def get_tfidf_keywords(reviews, max_features=5):
-    texts = [process_review_text(reviews)]
-    vectorizer = TfidfVectorizer(max_features=max_features, stop_words='english')
-    tfidf_matrix = vectorizer.fit_transform(texts)
-    feature_names = vectorizer.get_feature_names_out()
-    tfidf_scores = tfidf_matrix.toarray()[0]
-    return {feature_names[i]: tfidf_scores[i] for i in range(len(feature_names))}
+    """Process review texts into a single string"""
+    return " ".join([str(review.get('text', '')) for review in reviews if review.get('text')])
 
 def build_place_feature_vector(reviews):
-    sentiment_scores = [review.get('sentiment', 0.5) for review in reviews]
-    average_sentiment = np.mean(sentiment_scores) if sentiment_scores else 0.5
-    sentiment_variance = np.var(sentiment_scores) if sentiment_scores else 0
+    """Build feature vector from reviews with error handling"""
+    if not reviews:
+        return np.zeros(6), {
+            'sentiment': {'average': 0, 'variance': 0},
+            'review_quality': {'average_length': 0, 'detail_variance': 0},
+            'keywords': []
+        }
 
-    review_lengths = [len(review.get('text', '')) for review in reviews]
-    average_review_length = np.mean(review_lengths) if review_lengths else 50
+    try:
+        # Extract sentiment scores
+        sentiment_scores = [review.get('sentiment', 0) for review in reviews]
+        avg_sentiment = np.mean(sentiment_scores) if sentiment_scores else 0
+        sentiment_variance = np.var(sentiment_scores) if sentiment_scores else 0
 
-    keywords = ["clean", "comfortable", "friendly"]
-    keyword_counts = [sum(1 for review in reviews if kw in review.get('text', '').lower()) for kw in keywords]
+        # Process review texts
+        texts = [str(review.get('text', '')) for review in reviews if review.get('text')]
+        avg_length = np.mean([len(text.split()) for text in texts]) if texts else 0
+        
+        # Get keywords using TF-IDF
+        if texts:
+            vectorizer = TfidfVectorizer(
+                max_features=10,
+                stop_words='english',
+                ngram_range=(1, 2)
+            )
+            try:
+                tfidf_matrix = vectorizer.fit_transform(texts)
+                feature_names = vectorizer.get_feature_names_out()
+                tfidf_scores = np.asarray(tfidf_matrix.mean(axis=0)).ravel()
+                
+                # Get top keywords
+                top_indices = tfidf_scores.argsort()[-5:][::-1]
+                keywords = [(feature_names[i], float(tfidf_scores[i])) 
+                          for i in top_indices]
+            except Exception as e:
+                print(f"Error in TF-IDF processing: {str(e)}")
+                keywords = []
+        else:
+            keywords = []
 
-    # Normalize values for consistent scaling
-    normalized_average_sentiment = average_sentiment / 1  # Sentiment ranges from -1 to 1
-    normalized_sentiment_variance = sentiment_variance / 1  # Variance is relative
-    normalized_review_length = average_review_length / 100  # Typical review length scaling
+        # Build feature vector
+        feature_vector = np.array([
+            avg_sentiment,
+            sentiment_variance,
+            avg_length / 100,  # Normalize length
+            len(keywords) / 10,  # Keyword diversity
+            np.mean([review.get('rating', 0) for review in reviews]) / 5,  # Normalized rating
+            1 if keywords else 0  # Has meaningful content
+        ])
 
-    # Combine features into a normalized vector
-    return np.array([
-        normalized_average_sentiment,
-        normalized_sentiment_variance,
-        normalized_review_length,
-    ] + keyword_counts)
+        metadata = {
+            'sentiment': {
+                'average': float(avg_sentiment),
+                'variance': float(sentiment_variance)
+            },
+            'review_quality': {
+                'average_length': float(avg_length),
+                'review_count': len(reviews)
+            },
+            'keywords': [{'word': word, 'score': float(score)} for word, score in keywords]
+        }
+
+        return feature_vector, metadata
+
+    except Exception as e:
+        print(f"Error building feature vector: {str(e)}")
+        return np.zeros(6), {
+            'sentiment': {'average': 0, 'variance': 0},
+            'review_quality': {'average_length': 0, 'detail_variance': 0},
+            'keywords': []
+        }

@@ -1,67 +1,150 @@
-from flask import Blueprint, jsonify, redirect, request, session, url_for
-import spotipy
-from spotipy.oauth2 import SpotifyOAuth
+from flask import Blueprint, jsonify, request, session
+import pandas as pd
 import os
+import random
+import numpy as np
+from sklearn.preprocessing import MinMaxScaler
 
 bp = Blueprint('spotify', __name__, url_prefix='/api/spotify')
 
-sp_oauth = SpotifyOAuth(
-    client_id=os.getenv("SPOTIPY_CLIENT_ID"),
-    client_secret=os.getenv("SPOTIPY_CLIENT_SECRET"),
-    redirect_uri=os.getenv("SPOTIPY_REDIRECT_URI"),  # Use the redirect URI from .env
-    scope="user-top-read"
-)
+# Load the Spotify dataset with a different encoding
+SPOTIFY_DATA = pd.read_csv('C:/Users/laima/fall2024/cs506/finalproject/vibescout/spotify-2023.csv', encoding='latin1')
 
-@bp.route('/login', methods=['GET'])
-def login():
-    auth_url = sp_oauth.get_authorize_url()
-    return redirect(auth_url)
+# Initialize scaler for feature normalization
+scaler = MinMaxScaler()
 
-@bp.route('/callback', methods=['GET'])
-def callback():
-    code = request.args.get('code')
-    if not code:
-        return "Authorization code not found.", 400
-    # Retrieve the token
-    token_info = sp_oauth.get_access_token(code)
-    session['token_info'] = token_info
-    
-    # Redirect back to the frontend with a success flag or message
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-    return redirect(f"{frontend_url}/?spotify_login=success")
-
-@bp.route('/user-data', methods=['GET'])
+@bp.route('/data', methods=['GET'])
 def get_spotify_data():
-    token_info = session.get('token_info')
-    if not token_info:
-        return redirect(url_for('spotify.login'))
-
-    sp = spotipy.Spotify(auth=token_info['access_token'])
-    top_tracks = sp.current_user_top_tracks(limit=20)
-    track_data = []
-    for track in top_tracks['items']:
-        audio_features = sp.audio_features(track['id'])[0]
-
-        track_data.append({
-            'track_name': track['name'],
-            'artist': track['artists'][0]['name'],
-            'genre': 'Unknown',  # Spotify track data doesn't include genres
-            'valence': audio_features.get('valence'),
-            'energy': audio_features.get('energy'),
-            'acousticness': audio_features.get('acousticness'),
-            'danceability': audio_features.get('danceability'),
-            'duration_ms': audio_features.get('duration_ms'),
-            'instrumentalness': audio_features.get('instrumentalness'),
-            'key': audio_features.get('key'),
-            'liveness': audio_features.get('liveness'),
-            'loudness': audio_features.get('loudness'),
-            'mode': audio_features.get('mode'),
-            'speechiness': audio_features.get('speechiness'),
-            'tempo': audio_features.get('tempo'),
-            'time_signature': audio_features.get('time_signature'),
-            'track_href': audio_features.get('track_href'),
-            'analysis_url': audio_features.get('analysis_url'),
-            'uri': audio_features.get('uri')
+    try:
+        # Convert DataFrame to list of dictionaries with proper data types
+        tracks = []
+        for _, row in SPOTIFY_DATA.iterrows():
+            track = {
+                'track_name': str(row['track_name']),
+                'artist': str(row['artist(s)_name']),
+                'valence': float(row['valence_%']) / 100,
+                'energy': float(row['energy_%']) / 100,
+                'danceability': float(row['danceability_%']) / 100,
+                'acousticness': float(row['acousticness_%']) / 100,
+                'instrumentalness': float(row['instrumentalness_%']) / 100,
+                'liveness': float(row['liveness_%']) / 100,
+                'speechiness': float(row['speechiness_%']) / 100,
+                'streams': int(row['streams']) if pd.notnull(row['streams']) else 0,
+                'popularity': int(row['in_spotify_playlists']) if pd.notnull(row['in_spotify_playlists']) else 0
+            }
+            tracks.append(track)
+        
+        return jsonify({
+            'status': 'success',
+            'tracks': tracks
         })
+    except Exception as e:
+        print(f"Error reading Spotify data: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': 'Failed to load Spotify data',
+            'error': str(e)
+        }), 500
 
-    return jsonify(track_data)
+@bp.route('/random-profile', methods=['GET'])
+def get_random_profile():
+    try:
+        # Randomly select 20 tracks from the dataset
+        random_tracks = SPOTIFY_DATA.sample(n=20)
+        track_data = create_track_data(random_tracks)
+        session['user_profile'] = track_data
+        return jsonify(track_data)
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': 'Failed to generate random profile',
+            'error': str(e)
+        }), 500
+
+@bp.route('/custom-profile', methods=['POST'])
+def create_custom_profile():
+    try:
+        selected_tracks = request.json.get('tracks', [])
+        if not selected_tracks or len(selected_tracks) > 10:
+            return jsonify({
+                'status': 'error',
+                'message': 'Please select between 1 and 10 tracks'
+            }), 400
+        
+        selected_data = SPOTIFY_DATA[SPOTIFY_DATA['track_name'].isin(selected_tracks)]
+        track_data = create_track_data(selected_data)
+        session['user_profile'] = track_data
+        return jsonify(track_data)
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': 'Failed to create custom profile',
+            'error': str(e)
+        }), 500
+
+@bp.route('/available-tracks', methods=['GET'])
+def get_available_tracks():
+    try:
+        search_query = request.args.get('query', '').lower()
+        
+        if search_query:
+            filtered_data = SPOTIFY_DATA[
+                SPOTIFY_DATA['track_name'].str.lower().str.contains(search_query) |
+                SPOTIFY_DATA['artist(s)_name'].str.lower().str.contains(search_query)
+            ]
+        else:
+            filtered_data = SPOTIFY_DATA
+        
+        tracks = filtered_data[['track_name', 'artist(s)_name']].to_dict('records')
+        return jsonify({
+            'status': 'success',
+            'tracks': tracks
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': 'Failed to fetch available tracks',
+            'error': str(e)
+        }), 500
+
+@bp.route('/profile', methods=['GET'])
+def get_profile():
+    try:
+        profile = session.get('user_profile')
+        if not profile:
+            # Generate random profile if none exists
+            random_tracks = SPOTIFY_DATA.sample(n=20)
+            profile = create_track_data(random_tracks)
+            session['user_profile'] = profile
+        return jsonify({
+            'status': 'success',
+            'profile': profile
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': 'Failed to get profile',
+            'error': str(e)
+        }), 500
+
+def create_track_data(tracks_df):
+    track_data = []
+    for _, track in tracks_df.iterrows():
+        try:
+            track_data.append({
+                'track_name': str(track['track_name']),
+                'artist': str(track['artist(s)_name']),
+                'genre': 'Unknown',
+                'valence': float(track['valence_%']) / 100,
+                'energy': float(track['energy_%']) / 100,
+                'acousticness': float(track['acousticness_%']) / 100,
+                'danceability': float(track['danceability_%']) / 100,
+                'instrumentalness': float(track['instrumentalness_%']) / 100,
+                'liveness': float(track['liveness_%']) / 100,
+                'speechiness': float(track['speechiness_%']) / 100
+            })
+        except Exception as e:
+            print(f"Error processing track {track['track_name']}: {str(e)}")
+            continue
+            
+    return track_data

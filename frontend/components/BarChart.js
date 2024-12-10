@@ -37,16 +37,27 @@ function BarChart({ userData, placeData }) {
 
   const options = {
     responsive: true,
+    maintainAspectRatio: false,
     plugins: {
       legend: { position: 'top' },
       title: { display: true, text: 'User Preferences vs. Place Attributes' },
     },
     scales: {
-      y: { beginAtZero: true, max: 1 },
+      y: { 
+        beginAtZero: true, 
+        max: 1,
+        ticks: {
+          stepSize: 0.1
+        }
+      },
     },
   };
 
-  return <Bar data={data} options={options} />;
+  return (
+    <div style={{ height: '400px', width: '100%' }}>
+      <Bar data={data} options={options} />
+    </div>
+  );
 }
 
 export default BarChart;
